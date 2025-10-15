@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmotionFAD - Real-time Emotion Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background-color: #000;
+        }
+        #video {
+            width: 100%;
+            display: block;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .controls {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .results {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .emotion-bars {
+            margin-top: 15px;
+        }
+        .emotion-bar {
+            margin-bottom: 10px;
+        }
+        .emotion-label {
+            display: inline-block;
+            width: 100px;
+            font-weight: 500;
+        }
+        .progress {
+            height: 25px;
+            margin-bottom: 5px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: 500;
+            text-align: center;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .btn-start {
+            background-color: #28a745;
+            color: white;
+            font-weight: 500;
+        }
+        .btn-stop {
+            background-color: #dc3545;
+            color: white;
+            font-weight: 500;
+        }
+        .btn:disabled {
+            opacity: 0.7;
+        }
+        .emotion-display {
+            font-size: 1.5rem;
+            font-weight: 600;
+            text-align: center;
+            margin: 15px 0;
+            min-height: 36px;
+        }
+        .emotion-happy { color: #28a745; }
+        .emotion-sad { color: #007bff; }
+        .emotion-angry { color: #dc3545; }
+        .emotion-surprise { color: #ffc107; }
+        .emotion-neutral { color: #6c757d; }
+        .emotion-fear { color: #6610f2; }
+        .emotion-disgust { color: #6f42c1; }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <header class="text-center mb-5">
+            <h1 class="display-4">EmotionFAD</h1>
+            <p class="lead">Real-time Facial Expression and Emotion Analysis</p>
+        </header>
+
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <!-- Video Feed -->
+                <div class="video-container">
+                    <video id="video" autoplay playsinline muted></video>
+                    <canvas id="canvas"></canvas>
+                </div>
+
+                <!-- Connection Status -->
+                <div id="status" class="status disconnected">
+                    <i class="fas fa-circle-notch fa-spin"></i> Connecting to server...
+                </div>
+
+                <!-- Controls -->
+                <div class="controls">
+                    <div class="d-grid gap-2 d-md-flex justify-content-center">
+                        <button id="startBtn" class="btn btn-start me-md-2">
+                            <i class="fas fa-play me-2"></i>Start Analysis
+                        </button>
+                        <button id="stopBtn" class="btn btn-stop" disabled>
+                            <i class="fas fa-stop me-2"></i>Stop
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="results">
+                    <h4>Analysis Results</h4>
+                    <div id="emotionDisplay" class="emotion-display">
+                        No face detected
+                    </div>
+                    
+                    <div id="emotionBars" class="emotion-bars">
+                        <!-- Emotion bars will be inserted here by JavaScript -->
+                    </div>
+                    
+                    <div id="analysisInfo" class="mt-3 text-muted small">
+                        <div>Status: <span id="analysisStatus">Inactive</span></div>
+                        <div>FPS: <span id="fpsCounter">0</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include required libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    
+    <script>
+        // DOM Elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusDiv = document.getElementById('status');
+        const emotionDisplay = document.getElementById('emotionDisplay');
+        const emotionBars = document.getElementById('emotionBars');
+        const analysisStatus = document.getElementById('analysisStatus');
+        const fpsCounter = document.getElementById('fpsCounter');
+
+        // Application state
+        let stream = null;
+        let isAnalyzing = false;
+        let socket = null;
+        let frameCount = 0;
+        let lastFpsUpdate = Date.now();
+        let fps = 0;
+        let analysisInProgress = false;
+
+        // Emotion colors for visualization
+        const emotionColors = {
+            'angry': '#dc3545',
+            'disgust': '#6f42c1',
+            'fear': '#6610f2',
+            'happy': '#28a745',
+            'sad': '#007bff',
+            'surprise': '#ffc107',
+            'neutral': '#6c757d'
+        };
+
+        // Initialize the application
+        async function init() {
+            // Connect to WebSocket server
+            connectWebSocket();
+            
+            // Set up event listeners
+            startBtn.addEventListener('click', startAnalysis);
+            stopBtn.addEventListener('click', stopAnalysis);
+            
+            // Initialize camera
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                });
+                
+                video.srcObject = stream;
+                await video.play();
+                
+                // Set canvas size to match video
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                });
+                
+                // Enable start button
+                startBtn.disabled = false;
+                
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                updateStatus('Error accessing camera. Please check permissions.', 'error');
+            }
+            
+            // Start FPS counter
+            setInterval(updateFps, 1000);
+        }
+
+        // Connect to WebSocket server
+        function connectWebSocket() {
+            // Create socket connection
+            socket = io({
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                timeout: 20000
+            });
+            
+            // Connection established
+            socket.on('connect', () => {
+                updateStatus('Connected to server', 'success');
+                startBtn.disabled = false;
+            });
+            
+            // Connection error
+            socket.on('connect_error', (error) => {
+                updateStatus('Connection error: ' + error.message, 'error');
+                startBtn.disabled = true;
+                stopBtn.disabled = true;
+            });
+            
+            // Disconnected
+            socket.on('disconnect', (reason) => {
+                updateStatus('Disconnected: ' + reason, 'error');
+                startBtn.disabled = true;
+                stopBtn.disabled = true;
+            });
+            
+            // Connection response
+            socket.on('connection_response', (data) => {
+                console.log('Server response:', data);
+                if (data.analyzer_ready === false) {
+                    updateStatus('Emotion analyzer not ready', 'error');
+                    startBtn.disabled = true;
+                }
+            });
+            
+            // Analysis started
+            socket.on('analysis_started', (data) => {
+                console.log('Analysis started:', data);
+                isAnalyzing = true;
+                analysisStatus.textContent = 'Active';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                
+                // Start processing frames
+                processVideo();
+            });
+            
+            // Analysis result
+            socket.on('analysis_result', (data) => {
+                analysisInProgress = false;
+                
+                if (data.status === 'success' && data.faces_detected > 0) {
+                    updateEmotionDisplay(data.analysis[0]);
+                } else {
+                    // No faces detected or error
+                    emotionDisplay.innerHTML = 'No face detected';
+                    emotionDisplay.className = 'emotion-display';
+                    
+                    // Clear emotion bars if no faces
+                    if (data.status !== 'processing') {
+                        emotionBars.innerHTML = '';
+                    }
+                }
+            });
+            
+            // Analysis error
+            socket.on('analysis_error', (data) => {
+                console.error('Analysis error:', data.error);
+                updateStatus('Analysis error: ' + data.error, 'error');
+                analysisInProgress = false;
+            });
+        }
+
+        // Start analysis
+        function startAnalysis() {
+            if (socket && socket.connected) {
+                socket.emit('start_analysis');
+            } else {
+                updateStatus('Not connected to server', 'error');
+            }
+        }
+
+        // Stop analysis
+        function stopAnalysis() {
+            isAnalyzing = false;
+            analysisStatus.textContent = 'Inactive';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Reset display
+            emotionDisplay.innerHTML = 'Analysis stopped';
+            emotionDisplay.className = 'emotion-display';
+            emotionBars.innerHTML = '';
+        }
+
+        // Process video frames
+        async function processVideo() {
+            if (!isAnalyzing) return;
+            
+            // Capture frame
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Only process a new frame if the previous one is done
+            if (!analysisInProgress) {
+                analysisInProgress = true;
+                
+                // Get image data as base64
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                // Send to server for analysis
+                if (socket && socket.connected) {
+                    socket.emit('video_frame', { frame: imageData });
+                }
+                
+                // Update FPS counter
+                frameCount++;
+                
+                // Draw face detection boxes (if any)
+                // This would be updated when we receive analysis results
+            }
+            
+            // Continue processing
+            requestAnimationFrame(processVideo);
+        }
+
+        // Update emotion display
+        function updateEmotionDisplay(analysis) {
+            const { dominant_emotion, confidence, emotions } = analysis;
+            
+            // Update emotion text
+            emotionDisplay.textContent = `${dominant_emotion.charAt(0).toUpperCase() + dominant_emotion.slice(1)} (${(confidence * 100).toFixed(1)}%)`;
+            emotionDisplay.className = `emotion-display emotion-${dominant_emotion}`;
+            
+            // Update emotion bars
+            emotionBars.innerHTML = '';
+            
+            for (const [emotion, value] of Object.entries(emotions)) {
+                const percentage = (value * 100).toFixed(1);
+                const isDominant = emotion === dominant_emotion;
+                const barWidth = isDominant ? '100%' : '80%';
+                
+                const barContainer = document.createElement('div');
+                barContainer.className = 'emotion-bar';
+                barContainer.innerHTML = `
+                    <div class="d-flex align-items-center mb-1">
+                        <span class="emotion-label">${emotion.charAt(0).toUpperCase() + emotion.slice(1)}</span>
+                        <div class="progress flex-grow-1 mx-2" style="height: 20px;">
+                            <div class="progress-bar" 
+                                 role="progressbar" 
+                                 style="width: ${percentage}%; background-color: ${emotionColors[emotion] || '#6c757d'}"
+                                 aria-valuenow="${percentage}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                        <span style="width: 50px; text-align: right;">${percentage}%</span>
+                    </div>
+                `;
+                
+                emotionBars.appendChild(barContainer);
+            }
+        }
+
+        // Update status display
+        function updateStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type === 'error' ? 'disconnected' : 'connected'}`;
+            
+            if (type === 'error') {
+                console.error(message);
+            } else {
+                console.log(message);
+            }
+        }
+
+        // Update FPS counter
+        function updateFps() {
+            const now = Date.now();
+            const delta = now - lastFpsUpdate;
+            fps = Math.round((frameCount * 1000) / delta);
+            fpsCounter.textContent = fps;
+            frameCount = 0;
+            lastFpsUpdate = now;
+        }
+
+        // Initialize the application when the page loads
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

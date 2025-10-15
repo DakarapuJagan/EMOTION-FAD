@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmotionFAD - Real-time Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        #videoElement {
+            width: 100%;
+            display: block;
+        }
+        .controls {
+            background-color: #343a40;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .btn-control {
+            min-width: 150px;
+            border-radius: 50px;
+            font-weight: 600;
+            padding: 10px 20px;
+        }
+        .results {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-online {
+            background-color: #28a745;
+        }
+        .status-offline {
+            background-color: #dc3545;
+        }
+        .device-info {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <header class="text-center my-4">
+            <h1 class="display-4">EmotionFAD</h1>
+            <p class="lead">Real-time Emotion and Fraud Detection</p>
+            <div class="device-info">
+                <span id="connectionStatus">
+                    <span class="status-indicator status-offline"></span>
+                    <span>Disconnected</span>
+                </span>
+                <span class="mx-3">|</span>
+                <span>Device: <span id="deviceType">Unknown</span></span>
+            </div>
+        </header>
+
+        <div class="video-container">
+            <video id="videoElement" autoplay playsinline></video>
+            <div class="controls">
+                <button id="startVideo" class="btn btn-primary btn-control">
+                    <i class="fas fa-video me-2"></i> Start Camera
+                </button>
+                <button id="startAudio" class="btn btn-success btn-control">
+                    <i class="fas fa-microphone me-2"></i> Start Microphone
+                </button>
+                <button id="stopAll" class="btn btn-danger btn-control" disabled>
+                    <i class="fas fa-stop me-2"></i> Stop
+                </button>
+            </div>
+        </div>
+
+        <div class="results mt-4">
+            <h3>Analysis Results</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white">
+                            <i class="fas fa-smile me-2"></i> Emotion Detection
+                        </div>
+                        <div class="card-body" id="emotionResults">
+                            <p class="text-muted">Start video to see emotion analysis</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-warning text-dark">
+                            <i class="fas fa-exclamation-triangle me-2"></i> Fraud Detection
+                        </div>
+                        <div class="card-body" id="fraudResults">
+                            <p class="text-muted">Start audio to see fraud analysis</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        // DOM Elements
+        const videoElement = document.getElementById('videoElement');
+        const startVideoBtn = document.getElementById('startVideo');
+        const startAudioBtn = document.getElementById('startAudio');
+        const stopAllBtn = document.getElementById('stopAll');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const deviceTypeSpan = document.getElementById('deviceType');
+        const emotionResults = document.getElementById('emotionResults');
+        const fraudResults = document.getElementById('fraudResults');
+
+        // WebSocket connection
+        const socket = io();
+        let isStreaming = false;
+        let stream = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+
+        // Update UI based on connection status
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            updateConnectionStatus(true);
+            detectDeviceType();
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            updateConnectionStatus(false);
+            stopAllMedia();
+        });
+
+        // Handle processed frames from server
+        socket.on('processed_frame', (data) => {
+            // Process and display emotion results
+            // This is a placeholder - implement actual processing
+            emotionResults.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>Emotion Detected:</strong> Happy (85% confidence)
+                </div>
+                <div class="progress mb-3">
+                    <div class="progress-bar bg-success" style="width: 85%">Happy</div>
+                </div>
+            `;
+        });
+
+        // Handle processed audio from server
+        socket.on('processed_audio', (data) => {
+            // Process and display fraud detection results
+            // This is a placeholder - implement actual processing
+            fraudResults.innerHTML = `
+                <div class="alert alert-warning">
+                    <strong>Analysis:</strong> Potential fraud indicators detected
+                </div>
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Stress Level
+                        <span class="badge bg-danger rounded-pill">High</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Deception Score
+                        <span class="badge bg-warning rounded-pill">65%</span>
+                    </li>
+                </ul>
+            `;
+        });
+
+        // Event Listeners
+        startVideoBtn.addEventListener('click', startVideo);
+        startAudioBtn.addEventListener('click', startAudio);
+        stopAllBtn.addEventListener('click', stopAllMedia);
+
+        // Functions
+        function updateConnectionStatus(isConnected) {
+            const statusIndicator = connectionStatus.querySelector('.status-indicator');
+            const statusText = connectionStatus.querySelector('span:last-child');
+            
+            if (isConnected) {
+                statusIndicator.className = 'status-indicator status-online';
+                statusText.textContent = 'Connected';
+            } else {
+                statusIndicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        function detectDeviceType() {
+            const userAgent = navigator.userAgent;
+            if (/mobile|android|iphone|ipad|ipod/i.test(userAgent)) {
+                deviceTypeSpan.textContent = 'Mobile Device';
+            } else if (/tablet|ipad/i.test(userAgent)) {
+                deviceTypeSpan.textContent = 'Tablet';
+            } else {
+                deviceTypeSpan.textContent = 'Desktop';
+            }
+        }
+
+        async function startVideo() {
+            try {
+                stopAllMedia();
+                
+                // Request camera access
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                });
+
+                videoElement.srcObject = stream;
+                isStreaming = true;
+                startVideoBtn.disabled = true;
+                startAudioBtn.disabled = true;
+                stopAllBtn.disabled = false;
+
+                // Notify server about video streaming
+                socket.emit('start_video');
+
+                // Start processing frames
+                processVideo();
+                
+                console.log('Video streaming started');
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Could not access the camera. Please ensure you have granted camera permissions.');
+            }
+        }
+
+        async function startAudio() {
+            try {
+                stopAllMedia();
+                
+                // Request microphone access
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: false
+                });
+
+                // Set up audio context and analyzer
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyzer = audioContext.createAnalyser();
+                source.connect(analyzer);
+
+                // Set up media recorder
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        // Send audio data to server
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const reader = new FileReader();
+                        reader.onload = function() {
+                            const base64data = reader.result.split(',')[1];
+                            socket.emit('audio_data', { audio: base64data });
+                        };
+                        reader.readAsDataURL(audioBlob);
+                        audioChunks = [];
+                    }
+                };
+
+                mediaRecorder.start(1000); // Collect 1 second of audio at a time
+
+                isStreaming = true;
+                startVideoBtn.disabled = true;
+                startAudioBtn.disabled = true;
+                stopAllBtn.disabled = false;
+
+                // Notify server about audio streaming
+                socket.emit('start_audio');
+                
+                console.log('Audio streaming started');
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                alert('Could not access the microphone. Please ensure you have granted microphone permissions.');
+            }
+        }
+
+        function stopAllMedia() {
+            if (stream) {
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+                stream = null;
+            }
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                mediaRecorder = null;
+            }
+
+            videoElement.srcObject = null;
+            isStreaming = false;
+            startVideoBtn.disabled = false;
+            startAudioBtn.disabled = false;
+            stopAllBtn.disabled = true;
+            
+            console.log('All media stopped');
+        }
+
+        function processVideo() {
+            if (!isStreaming) return;
+
+            // Only process if video is ready
+            if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                // Create a canvas to capture the current frame
+                const canvas = document.createElement('canvas');
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                const context = canvas.getContext('2d');
+                context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                
+                // Convert canvas to base64 and send to server
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                socket.emit('video_frame', { image: imageData });
+            }
+
+            // Continue processing frames
+            requestAnimationFrame(processVideo);
+        }
+
+        // Initialize
+        updateConnectionStatus(false);
+    </script>
+</body>
+</html>

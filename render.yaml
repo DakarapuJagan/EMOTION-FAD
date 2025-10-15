@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: emotionfad
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+    startCommand: gunicorn --worker-class eventlet -w 1 --threads 1 -b 0.0.0.0:$PORT wsgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: FLASK_APP
+        value: "wsgi.py"
+      - key: FLASK_ENV
+        value: "production"
+    plan: free
+    autoDeploy: true

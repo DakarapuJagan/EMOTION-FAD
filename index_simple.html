@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple EmotionFAD</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        #messages {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            min-height: 100px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple EmotionFAD Test</h1>
+    
+    <div>
+        <h3>Connection Status: <span id="connection-status">Disconnected</span></h3>
+        <div id="status" class="disconnected">Not connected to server</div>
+        
+        <div>
+            <button id="connectBtn">Connect</button>
+            <button id="testBtn" disabled>Send Test Message</button>
+        </div>
+        
+        <h3>Messages:</h3>
+        <div id="messages"></div>
+    </div>
+
+    <!-- Include Socket.IO from CDN -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    
+    <script>
+        // Initialize Socket.IO
+        let socket;
+        const statusDiv = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const testBtn = document.getElementById('testBtn');
+        const connectionStatus = document.getElementById('connection-status');
+        const messagesDiv = document.getElementById('messages');
+        
+        // Connection state
+        let isConnected = false;
+        
+        // Connect to server
+        function connect() {
+            if (isConnected) {
+                disconnect();
+                return;
+            }
+            
+            // Create new connection
+            socket = io({
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                timeout: 20000
+            });
+            
+            // Connection established
+            socket.on('connect', () => {
+                logMessage('Connected to server');
+                updateConnectionStatus(true);
+                
+                // Enable test button
+                testBtn.disabled = false;
+                connectBtn.textContent = 'Disconnect';
+            });
+            
+            // Connection error
+            socket.on('connect_error', (error) => {
+                logMessage('Connection error: ' + error.message, 'error');
+                updateConnectionStatus(false);
+            });
+            
+            // Disconnected
+            socket.on('disconnect', (reason) => {
+                logMessage('Disconnected: ' + reason);
+                updateConnectionStatus(false);
+            });
+            
+            // Handle custom events
+            socket.on('connection_response', (data) => {
+                logMessage('Server: ' + JSON.stringify(data));
+            });
+            
+            socket.on('response', (data) => {
+                logMessage('Response: ' + JSON.stringify(data));
+            });
+            
+            socket.on('error', (error) => {
+                logMessage('Error: ' + JSON.stringify(error), 'error');
+            });
+        }
+        
+        // Disconnect from server
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                logMessage('Disconnected from server');
+                updateConnectionStatus(false);
+                testBtn.disabled = true;
+                connectBtn.textContent = 'Connect';
+            }
+        }
+        
+        // Send test message
+        function sendTestMessage() {
+            if (socket && isConnected) {
+                const message = 'Test message ' + new Date().toLocaleTimeString();
+                socket.emit('message', message);
+                logMessage('Sent: ' + message);
+            }
+        }
+        
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            const status = connected ? 'Connected' : 'Disconnected';
+            const statusClass = connected ? 'connected' : 'disconnected';
+            
+            statusDiv.textContent = status;
+            statusDiv.className = statusClass;
+            connectionStatus.textContent = status;
+            connectionStatus.className = statusClass.toLowerCase();
+        }
+        
+        // Log message to the messages div
+        function logMessage(message, type = 'info') {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
+            
+            if (type === 'error') {
+                messageElement.style.color = 'red';
+            }
+            
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            // Also log to console
+            console.log('[' + type.toUpperCase() + '] ' + message);
+        }
+        
+        // Event listeners
+        connectBtn.addEventListener('click', connect);
+        testBtn.addEventListener('click', sendTestMessage);
+        
+        // Initial log
+        logMessage('Page loaded. Click "Connect" to start.');
+    </script>
+</body>
+</html>
